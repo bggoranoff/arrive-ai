@@ -7,7 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.arriveai.app",
+      "deploymentTarget": "18.0"
     },
     "android": {
       "adaptiveIcon": {
