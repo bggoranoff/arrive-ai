@@ -2,21 +2,36 @@
   "name": "arriveai",
   "version": "1.0.0",
   "main": "index.ts",
-  "dependencies": {
-    "expo": "^54.0.0",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5"
-  },
-  "devDependencies": {
-    "@types/react": "~19.1.10",
-    "typescript": "~5.9.2"
-  },
+  "private": true,
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "dev": "vite",
+    "build:web": "vite build",
+    "preview": "vite preview"
   },
-  "private": true
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "expo": "^54.0.0",
+    "expo-status-bar": "~3.0.9",
+    "lucide-react": "^1.16.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "tailwindcss": "^4.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "~19.1.10",
+    "@types/react-dom": "~19.1.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "typescript": "~5.9.2",
+    "vite": "^8.0.12"
+  }
 }
