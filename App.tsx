@@ -1,10 +1,11 @@
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { initialApplications } from "./src/data/mockData";
+import { loadApplications, saveApplications } from "./src/rn/services/storage";
 import { colors } from "./src/rn/theme";
 
 import ApplicationList from "./src/rn/screens/ApplicationList";
@@ -35,11 +36,23 @@ export default function App() {
   const [applications, setApplications] = useState(
     () => JSON.parse(JSON.stringify(initialApplications))
   );
+  const [ready, setReady] = useState(false);
   const [stack, setStack] = useState<StackEntry[]>([
     { screen: "list", params: {}, anim: new Animated.Value(0) },
   ]);
   const [popup, setPopup] = useState<Popup | null>(null);
   const animating = useRef(false);
+
+  useEffect(() => {
+    loadApplications().then((saved) => {
+      if (saved) setApplications(saved);
+      setReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (ready) saveApplications(applications);
+  }, [applications, ready]);
 
   const push = useCallback((screen: ScreenName, params: Record<string, any> = {}) => {
     if (animating.current) return;

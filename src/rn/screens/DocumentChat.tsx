@@ -1,18 +1,20 @@
-import { useRef, useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   FlatList,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   StyleSheet,
 } from "react-native";
 import { ArrowUp, Sparkles } from "../iconMap";
 import ScreenHeader from "../components/ScreenHeader";
 import { colors } from "../theme";
-import { initialChatThread, cannedReplies } from "../../data/mockData";
+import { initialChatThread } from "../../data/mockData";
+import { chatCompletion, type ChatMessage } from "../services/lyceum";
+import { loadChatThread, saveChatThread } from "../services/storage";
 
 interface Message {
   id: string;
@@ -26,32 +28,88 @@ interface Props {
 }
 
 export default function DocumentChat({ document: doc, onBack }: Props) {
-  const [thread, setThread] = useState<Message[]>(
-    initialChatThread.map((m: any, i: number) => ({ ...m, id: String(i) }))
-  );
+  const defaultThread = initialChatThread.map((m: any, i: number) => ({
+    ...m,
+    id: String(i),
+  }));
+  const [thread, setThread] = useState<Message[]>(defaultThread);
   const [draft, setDraft] = useState("");
-  const replyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const listRef = useRef<FlatList>(null);
+  const [loading, setLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const send = () => {
-    if (!draft.trim()) return;
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    loadChatThread(doc.id).then((saved) => {
+      if (saved) setThread(saved);
+    });
+  }, [doc.id]);
+
+  useEffect(() => {
+    if (thread !== defaultThread) {
+      saveChatThread(doc.id, thread);
+    }
+  }, [thread]);
+
+  const send = async () => {
+    if (!draft.trim() || loading) return;
+    const userText = draft.trim();
     const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      text: draft.trim(),
+      text: userText,
     };
     setThread((prev) => [...prev, userMsg]);
     setDraft("");
+    setLoading(true);
 
-    clearTimeout(replyTimer.current);
-    replyTimer.current = setTimeout(() => {
-      const reply: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        text: cannedReplies[Math.floor(Math.random() * cannedReplies.length)],
-      };
-      setThread((prev) => [...prev, reply]);
-    }, 800);
+    try {
+      const history: ChatMessage[] = [
+        {
+          role: "system",
+          content: `You are ArriveAI, a friendly document assistant for immigrants in Germany. The user is looking at a document called "${doc.name}". Help them understand it and answer questions about how to fill it out. Be concise and practical. Always respond in English, even if the document names are in German.`,
+        },
+        ...thread.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.text,
+        })),
+        { role: "user" as const, content: userText },
+      ];
+
+      const content = await chatCompletion(history);
+
+      setThread((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          text: content,
+        },
+      ]);
+    } catch (err: any) {
+      setThread((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          text: `Error: ${err.message}`,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
@@ -78,19 +136,26 @@ export default function DocumentChat({ document: doc, onBack }: Props) {
     <View style={styles.container}>
       <ScreenHeader title={doc.name} onBack={onBack} />
 
-      <KeyboardAvoidingView
-        style={styles.body}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-      >
+      <View style={styles.body}>
         <FlatList
           ref={listRef}
           data={thread}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messages}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() =>
             listRef.current?.scrollToEnd({ animated: true })
+          }
+          ListFooterComponent={
+            loading ? (
+              <View style={[styles.bubble, styles.bubbleAssistant]}>
+                <Text style={[styles.bubbleText, styles.bubbleTextAssistant]}>
+                  Thinking...
+                </Text>
+              </View>
+            ) : null
           }
           ListHeaderComponent={
             <View style={styles.summaryCard}>
@@ -106,7 +171,7 @@ export default function DocumentChat({ document: doc, onBack }: Props) {
           }
         />
 
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow, { marginBottom: keyboardHeight || 12 }]}>
           <TextInput
             style={styles.input}
             value={draft}
@@ -119,11 +184,12 @@ export default function DocumentChat({ document: doc, onBack }: Props) {
           <TouchableOpacity
             style={[
               styles.sendButton,
-              draft.trim()
+              draft.trim() && !loading
                 ? styles.sendButtonActive
                 : styles.sendButtonInactive,
             ]}
             onPress={send}
+            disabled={loading}
             activeOpacity={0.7}
           >
             <ArrowUp
@@ -132,7 +198,7 @@ export default function DocumentChat({ document: doc, onBack }: Props) {
             />
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -206,7 +272,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginHorizontal: 20,
-    marginBottom: 12,
     paddingLeft: 16,
     paddingRight: 6,
     paddingVertical: 6,
