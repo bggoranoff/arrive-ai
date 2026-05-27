@@ -1,4 +1,5 @@
 import {
+  Calendar,
   FileText,
   Home,
   Coins,
@@ -32,10 +33,15 @@ import {
   PiggyBank,
   FileSignature,
   BadgeCheck,
+  Settings,
+  Globe,
+  Sun,
+  Moon,
   type LucideIcon,
 } from "lucide-react-native";
 
 const iconMap: Record<string, LucideIcon> = {
+  Calendar,
   FileText,
   Home,
   Coins,
@@ -76,6 +82,7 @@ export function getIcon(name: string): LucideIcon {
 }
 
 export {
+  Calendar,
   Plus,
   ChevronRight,
   ChevronLeft,
@@ -91,4 +98,8 @@ export {
   Clock,
   X,
   FileText,
+  Settings,
+  Globe,
+  Sun,
+  Moon,
 };

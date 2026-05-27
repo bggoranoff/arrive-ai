@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { ChevronLeft } from "../iconMap";
-import { colors } from "../theme";
+import { useThemeColors } from "../ThemeContext";
+import { colors as defaultColors } from "../theme";
 
 interface Props {
   title: string;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ScreenHeader({ title, onBack, right }: Props) {
+  const colors = useThemeColors();
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -18,7 +20,7 @@ export default function ScreenHeader({ title, onBack, right }: Props) {
       >
         <ChevronLeft size={24} color={colors.ink} />
       </TouchableOpacity>
-      <Text style={styles.title} numberOfLines={1}>
+      <Text style={[styles.title, { color: colors.ink }]} numberOfLines={1}>
         {title}
       </Text>
       {right ? <View style={styles.right}>{right}</View> : null}
@@ -47,7 +49,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 20,
     fontWeight: "500",
-    color: colors.ink,
+    color: defaultColors.ink,
     paddingRight: 8,
   },
   right: {

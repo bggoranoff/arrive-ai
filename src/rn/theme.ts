@@ -1,4 +1,6 @@
-export const colors = {
+export type ThemeMode = "light" | "dark";
+
+const lightColors = {
   brand: "#185fa5",
   brandSoft: "#e6eef7",
   deadlineBg: "#faeeda",
@@ -12,6 +14,28 @@ export const colors = {
   newBadgeBg: "#e8f3ec",
   newBadgeText: "#1f7a3a",
 };
+
+const darkColors: typeof lightColors = {
+  brand: "#4d9de6",
+  brandSoft: "#1a2a3d",
+  deadlineBg: "#3d2e10",
+  deadlineText: "#f0c060",
+  deadlineDot: "#ef9f27",
+  ink: "#e8eaed",
+  inkMuted: "#9ca3af",
+  surface: "#1e2028",
+  screenBg: "#121318",
+  cardBorder: "#2e3038",
+  newBadgeBg: "#1a2e20",
+  newBadgeText: "#4eda6a",
+};
+
+export function getColors(mode: ThemeMode) {
+  return mode === "dark" ? darkColors : lightColors;
+}
+
+// Default export for backwards compatibility during transition
+export const colors = lightColors;
 
 export const fonts = {
   regular: { fontWeight: "400" as const },

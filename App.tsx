@@ -1,17 +1,32 @@
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, StyleSheet, View } from "react-native";
+import { Animated, Dimensions, StyleSheet, View, Modal, ActivityIndicator, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { initialApplications } from "./src/data/mockData";
-import { loadApplications, saveApplications } from "./src/rn/services/storage";
-import { colors } from "./src/rn/theme";
+import { initialApplications, applicationTemplates } from "./src/data/mockData";
+import {
+  loadApplications,
+  saveApplications,
+  loadLanguage,
+  saveLanguage,
+  loadTheme,
+  saveTheme,
+  saveChatThread,
+  migrateIfNeeded,
+} from "./src/rn/services/storage";
+import { getColors, type ThemeMode } from "./src/rn/theme";
+import { t } from "./src/rn/services/i18n";
+import { ThemeProvider } from "./src/rn/ThemeContext";
 
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import { Alert } from "react-native";
+import { chatCompletion } from "./src/rn/services/lyceum";
 import ApplicationList from "./src/rn/screens/ApplicationList";
 import ApplicationOverview from "./src/rn/screens/ApplicationOverview";
-import ScanDocument from "./src/rn/screens/ScanDocument";
 import DocumentChat from "./src/rn/screens/DocumentChat";
+import SettingsScreen from "./src/rn/screens/SettingsScreen";
 
 import AddApplicationSheet from "./src/rn/popups/AddApplicationSheet";
 import CameraGallerySheet from "./src/rn/popups/CameraGallerySheet";
@@ -19,7 +34,7 @@ import DeadlineSheet from "./src/rn/popups/DeadlineSheet";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
-type ScreenName = "list" | "overview" | "scan" | "document";
+type ScreenName = "list" | "overview" | "scan" | "document" | "settings";
 
 interface StackEntry {
   screen: ScreenName;
@@ -33,9 +48,13 @@ interface Popup {
 }
 
 export default function App() {
+  const [scanning, setScanning] = useState(false);
   const [applications, setApplications] = useState(
     () => JSON.parse(JSON.stringify(initialApplications))
   );
+  const [language, setLanguage] = useState("English");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const colors = getColors(themeMode);
   const [ready, setReady] = useState(false);
   const [stack, setStack] = useState<StackEntry[]>([
     { screen: "list", params: {}, anim: new Animated.Value(0) },
@@ -44,10 +63,16 @@ export default function App() {
   const animating = useRef(false);
 
   useEffect(() => {
-    loadApplications().then((saved) => {
-      if (saved) setApplications(saved);
-      setReady(true);
-    });
+    migrateIfNeeded().then(() =>
+      Promise.all([loadApplications(), loadLanguage(), loadTheme()]).then(
+        ([savedApps, savedLang, savedTheme]) => {
+          if (savedApps) setApplications(savedApps);
+          setLanguage(savedLang);
+          setThemeMode(savedTheme);
+          setReady(true);
+        }
+      )
+    );
   }, []);
 
   useEffect(() => {
@@ -91,50 +116,183 @@ export default function App() {
   }, []);
 
   const handleAddApplication = useCallback((catalogId: string) => {
-    setApplications((prev: any[]) => {
-      if (prev.find((a) => a.id === catalogId)) return prev;
-      return [
-        ...prev,
-        {
-          id: catalogId,
-          icon: "FileText",
-          title: catalogId,
-          progressPct: 0,
-          isNew: true,
-          docsRequired: 3,
-          overview: {
-            description: "New application.",
-            steps: [{ text: "Scan first document", done: false }],
-          },
-          documents: [],
-          deadlines: [],
-          nextDeadline: null,
-          calendarMonth: { month: 5, year: 2026, monthName: "June" },
+    const tmpl = (applicationTemplates as any)[catalogId];
+    if (!tmpl) return;
+    const now = new Date();
+    setApplications((prev: any[]) => [
+      ...prev,
+      {
+        id: `${catalogId}-${Date.now()}`,
+        icon: tmpl.icon,
+        title: tmpl.title,
+        progressPct: 0,
+        isNew: true,
+        docsRequired: tmpl.requiredDocs.length,
+        createdAt: now.toISOString(),
+        overview: {
+          description: tmpl.description,
+          steps: tmpl.requiredDocs.map((text: string) => ({ text, done: false })),
         },
-      ];
-    });
+        documents: [],
+        deadlines: [],
+        nextDeadline: null,
+        calendarMonth: { month: now.getMonth(), year: now.getFullYear(), monthName: now.toLocaleString(undefined, { month: "long" }) },
+      },
+    ]);
     closePopup();
   }, [closePopup]);
 
-  const handleCapture = useCallback(() => {
-    const topEntry = stack[stack.length - 1];
-    const appId = topEntry.params.appId;
-    const newDoc = {
-      id: `doc-${Date.now()}`,
-      icon: "FileText",
-      name: "Scanned document",
-      status: "Processing",
-    };
+  const handleChangeLanguage = useCallback((lang: string) => {
+    setLanguage(lang);
+    saveLanguage(lang);
+  }, []);
+
+  const handleChangeTheme = useCallback((mode: ThemeMode) => {
+    setThemeMode(mode);
+    saveTheme(mode);
+  }, []);
+
+  const handleClearChat = useCallback((docId: string) => {
+    saveChatThread(docId, []);
+  }, []);
+
+  const handleDeleteApplication = useCallback((appId: string) => {
+    setApplications((prev: any[]) => prev.filter((a) => a.id !== appId));
+  }, []);
+
+  const handleDeleteDocument = useCallback((appId: string, docId: string) => {
     setApplications((prev: any[]) =>
-      prev.map((a) =>
-        a.id === appId ? { ...a, documents: [...a.documents, newDoc] } : a
-      )
+      prev.map((a) => {
+        if (a.id !== appId) return a;
+        const doc = a.documents.find((d: any) => d.id === docId);
+        const stepIdx = doc?.matchedStepIndex ?? -1;
+        const docs = a.documents.filter((d: any) => d.id !== docId);
+        const updatedSteps = stepIdx >= 0 && a.overview?.steps?.[stepIdx]
+          ? a.overview.steps.map((s: any, i: number) =>
+              i === stepIdx ? { ...s, done: false } : s
+            )
+          : a.overview?.steps;
+        const doneCount = updatedSteps?.filter((s: any) => s.done).length ?? 0;
+        const totalSteps = updatedSteps?.length ?? 1;
+        return {
+          ...a,
+          documents: docs,
+          overview: { ...a.overview, steps: updatedSteps },
+          progressPct: Math.round((doneCount / totalSteps) * 100),
+        };
+      })
     );
-    pop();
-    setTimeout(() => {
-      push("document", { appId, docId: newDoc.id });
-    }, 300);
-  }, [stack, pop, push]);
+  }, []);
+
+  const launchPicker = useCallback(async (appId: string, source: "camera" | "gallery") => {
+    try {
+      if (source === "camera") {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (perm.status !== "granted") {
+          Alert.alert("Camera access needed", "Enable camera access for Expo Go in Settings.");
+          return;
+        }
+      }
+
+      const result = source === "camera"
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setScanning(true);
+      const imageUri = result.assets[0].uri;
+      const docId = `doc-${Date.now()}`;
+
+      const app = applications.find((a: any) => a.id === appId);
+      const steps = app?.overview?.steps?.map((s: any) => s.text) ?? [];
+
+      let docName = "Scanned document";
+      let summary = "";
+      let matchedStep = -1;
+
+      try {
+        const b64 = await FileSystem.readAsStringAsync(imageUri, { encoding: "base64" });
+        const stepsJson = JSON.stringify(steps);
+        const raw = await chatCompletion(
+          [
+            {
+              role: "system",
+              content: `You are a document classifier for an immigration app. The user scanned a document for their "${app?.title}" application. The application has these checklist steps: ${stepsJson}. Identify the document and respond with ONLY a JSON object (no markdown): {"name": "document name in English", "summary": "1-2 sentence description", "matched_step_index": <index of matching step or -1>}`,
+            },
+            {
+              role: "user",
+              content: [
+                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } },
+                { type: "text", text: "What document is this?" },
+              ],
+            },
+          ],
+          { maxTokens: 300, temperature: 0.1 },
+        );
+        const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        docName = parsed.name || docName;
+        summary = parsed.summary || "";
+        matchedStep = typeof parsed.matched_step_index === "number" ? parsed.matched_step_index : -1;
+      } catch (e) {
+        console.error("[scan] recognition failed:", e);
+      }
+
+      const newDoc = {
+        id: docId,
+        icon: "FileText",
+        name: docName,
+        status: "Scanned",
+        summary,
+        imageUri,
+        matchedStepIndex: matchedStep,
+      };
+
+      setApplications((prev: any[]) =>
+        prev.map((a) => {
+          if (a.id !== appId) return a;
+          const docs = [...a.documents, newDoc];
+          const updatedSteps = matchedStep >= 0 && a.overview?.steps?.[matchedStep]
+            ? a.overview.steps.map((s: any, i: number) =>
+                i === matchedStep ? { ...s, done: true } : s
+              )
+            : a.overview?.steps;
+          const doneCount = updatedSteps?.filter((s: any) => s.done).length ?? 0;
+          const totalSteps = updatedSteps?.length ?? 1;
+          return {
+            ...a,
+            documents: docs,
+            overview: { ...a.overview, steps: updatedSteps },
+            progressPct: Math.round((doneCount / totalSteps) * 100),
+          };
+        })
+      );
+      setScanning(false);
+      push("document", { appId, docId });
+    } catch (e: any) {
+      setScanning(false);
+      Alert.alert("Error", e.message);
+    }
+  }, [push, applications]);
+
+  const handleAddDocument = useCallback((appId: string) => {
+    Alert.alert(
+      t("addDocument", language),
+      undefined,
+      [
+        { text: t("cancel", language), style: "cancel" },
+        {
+          text: t("takePhoto", language),
+          onPress: () => launchPicker(appId, "camera"),
+        },
+        {
+          text: t("chooseFromGallery", language),
+          onPress: () => launchPicker(appId, "gallery"),
+        },
+      ],
+    );
+  }, [language, launchPicker]);
 
   const renderScreen = (entry: StackEntry, index: number) => {
     const app = applications.find((a: any) => a.id === entry.params.appId);
@@ -150,6 +308,9 @@ export default function App() {
             applications={applications}
             onOpenApplication={(id) => push("overview", { appId: id })}
             onAddApplication={() => openPopup("addApp")}
+            onOpenSettings={() => push("settings")}
+            onDeleteApplication={handleDeleteApplication}
+            language={language}
           />
         );
         break;
@@ -158,7 +319,7 @@ export default function App() {
           <ApplicationOverview
             app={app}
             onBack={pop}
-            onAddDocument={(appId) => push("scan", { appId })}
+            onAddDocument={handleAddDocument}
             onOpenDocument={(appId, docId) =>
               push("document", { appId, docId })
             }
@@ -166,22 +327,27 @@ export default function App() {
               const dl = app.deadlines.find((d: any) => d.day === day);
               if (dl) openPopup("deadline", { deadline: dl, app });
             }}
+            onDeleteDocument={handleDeleteDocument}
+            onClearChat={handleClearChat}
+            language={language}
           />
         ) : null;
-        break;
-      case "scan":
-        content = (
-          <ScanDocument
-            onBack={pop}
-            onCapture={handleCapture}
-            onOpenGalleryPopup={() => openPopup("cameraGallery")}
-          />
-        );
         break;
       case "document":
         content = doc ? (
-          <DocumentChat document={doc} onBack={pop} />
+          <DocumentChat document={doc} onBack={pop} language={language} />
         ) : null;
+        break;
+      case "settings":
+        content = (
+          <SettingsScreen
+            language={language}
+            onChangeLanguage={handleChangeLanguage}
+            themeMode={themeMode}
+            onChangeTheme={handleChangeTheme}
+            onBack={pop}
+          />
+        );
         break;
     }
 
@@ -190,6 +356,7 @@ export default function App() {
         key={`${entry.screen}-${index}`}
         style={[
           styles.screen,
+          { backgroundColor: colors.screenBg },
           { transform: [{ translateX: entry.anim }] },
           index < stack.length - 1 && !animating.current && styles.screenHidden,
         ]}
@@ -200,9 +367,10 @@ export default function App() {
   };
 
   return (
+    <ThemeProvider value={colors}>
     <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.screenBg }]}>
+        <StatusBar style={themeMode === "dark" ? "light" : "dark"} />
         <View style={styles.screenContainer}>
           {stack.map(renderScreen)}
         </View>
@@ -211,7 +379,7 @@ export default function App() {
           open={popup?.type === "addApp"}
           onClose={closePopup}
           onPick={handleAddApplication}
-          existingIds={applications.map((a: any) => a.id)}
+          language={language}
         />
         <CameraGallerySheet
           open={popup?.type === "cameraGallery"}
@@ -231,16 +399,27 @@ export default function App() {
           onClose={closePopup}
           deadline={popup?.params?.deadline ?? null}
           app={popup?.params?.app ?? null}
+          language={language}
         />
       </SafeAreaView>
+      <Modal visible={scanning} transparent animationType="fade">
+        <View style={styles.scanOverlay}>
+          <View style={[styles.scanCard, { backgroundColor: colors.surface }]}>
+            <ActivityIndicator size="large" color={colors.brand} />
+            <Text style={[styles.scanText, { color: colors.ink }]}>
+              {t("analyzing", language)}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaProvider>
+    </ThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.screenBg,
   },
   screenContainer: {
     flex: 1,
@@ -248,9 +427,28 @@ const styles = StyleSheet.create({
   },
   screen: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.screenBg,
   },
   screenHidden: {
     opacity: 0,
+  },
+  scanOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scanCard: {
+    borderRadius: 20,
+    padding: 32,
+    alignItems: "center",
+    gap: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  scanText: {
+    fontSize: 16,
+    fontWeight: "500",
   },
 });

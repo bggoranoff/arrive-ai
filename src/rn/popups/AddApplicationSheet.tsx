@@ -8,38 +8,37 @@ import {
 import { ChevronRight } from "../iconMap";
 import BottomSheet from "../components/BottomSheet";
 import IconTile from "../components/IconTile";
-import { colors } from "../theme";
+import { useThemeColors } from "../ThemeContext";
+import { colors as defaultColors } from "../theme";
 import { applicationCatalog } from "../../data/mockData";
+import { t } from "../services/i18n";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onPick: (catalogId: string) => void;
-  existingIds: string[];
+  language?: string;
 }
 
 export default function AddApplicationSheet({
   open,
   onClose,
   onPick,
-  existingIds,
+  language = "English",
 }: Props) {
-  const available = applicationCatalog.filter(
-    (c: any) => !existingIds.includes(c.id)
-  );
-
+  const colors = useThemeColors();
   return (
     <BottomSheet open={open} onClose={onClose}>
       <View style={styles.content}>
-        <Text style={styles.title}>Add an application</Text>
-        <Text style={styles.subtitle}>
-          Choose from available applications below.
+        <Text style={[styles.title, { color: colors.ink }]}>{t("addApplication", language)}</Text>
+        <Text style={[styles.subtitle, { color: colors.inkMuted }]}>
+          {t("chooseApplication", language)}
         </Text>
         <ScrollView
           style={styles.list}
           showsVerticalScrollIndicator={false}
         >
-          {available.map((item: any) => (
+          {applicationCatalog.map((item: any) => (
             <TouchableOpacity
               key={item.id}
               style={styles.row}
@@ -48,8 +47,8 @@ export default function AddApplicationSheet({
             >
               <IconTile name={item.icon} size="md" tone="brand" />
               <View style={styles.rowBody}>
-                <Text style={styles.rowTitle}>{item.title}</Text>
-                <Text style={styles.rowSubtitle}>{item.subtitle}</Text>
+                <Text style={[styles.rowTitle, { color: colors.ink }]}>{item.title}</Text>
+                <Text style={[styles.rowSubtitle, { color: colors.inkMuted }]}>{item.subtitle}</Text>
               </View>
               <ChevronRight size={18} color={colors.inkMuted} />
             </TouchableOpacity>
@@ -69,11 +68,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "500",
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   subtitle: {
     fontSize: 13,
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
     marginTop: 4,
   },
   list: {
@@ -93,11 +92,11 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     fontWeight: "500",
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   rowSubtitle: {
     fontSize: 13,
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
     marginTop: 2,
   },
 });

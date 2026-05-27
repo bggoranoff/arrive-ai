@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
+import PressableScale from "../components/PressableScale";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
+  Alert,
   StyleSheet,
   Dimensions,
   NativeSyntheticEvent,
@@ -19,7 +21,9 @@ import {
 import ScreenHeader from "../components/ScreenHeader";
 import IconTile from "../components/IconTile";
 import ProgressBar from "../components/ProgressBar";
-import { colors } from "../theme";
+import { useThemeColors } from "../ThemeContext";
+import { colors as defaultColors } from "../theme";
+import { t, dayNames } from "../services/i18n";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_WIDTH = SCREEN_WIDTH - 70;
@@ -31,6 +35,9 @@ interface Props {
   onAddDocument: (appId: string) => void;
   onOpenDocument: (appId: string, docId: string) => void;
   onOpenDeadline: (appId: string, day: number) => void;
+  onDeleteDocument: (appId: string, docId: string) => void;
+  onClearChat: (docId: string) => void;
+  language: string;
 }
 
 export default function ApplicationOverview({
@@ -39,7 +46,11 @@ export default function ApplicationOverview({
   onAddDocument,
   onOpenDocument,
   onOpenDeadline,
+  onDeleteDocument,
+  onClearChat,
+  language,
 }: Props) {
+  const colors = useThemeColors();
   const [active, setActive] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -72,12 +83,15 @@ export default function ApplicationOverview({
         contentContainerStyle={styles.carousel}
         style={styles.carouselScroll}
       >
-        <OverviewCard app={app} />
-        <DeadlinesCard app={app} onOpenDeadline={onOpenDeadline} />
+        <OverviewCard app={app} language={language} />
+        <DeadlinesCard app={app} onOpenDeadline={onOpenDeadline} language={language} />
         <DocumentsCard
           app={app}
           onAddDocument={onAddDocument}
           onOpenDocument={onOpenDocument}
+          onDeleteDocument={onDeleteDocument}
+          onClearChat={onClearChat}
+          language={language}
         />
       </ScrollView>
 
@@ -86,15 +100,15 @@ export default function ApplicationOverview({
           <TouchableOpacity
             key={i}
             onPress={() => scrollToCard(i)}
-            style={[styles.dot, i === active ? styles.dotActive : styles.dotInactive]}
+            style={[styles.dot, i === active ? [styles.dotActive, { backgroundColor: colors.brand }] : [styles.dotInactive, { backgroundColor: colors.cardBorder }]]}
           />
         ))}
       </View>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.cardBorder }]}>
         <View style={styles.footerRow}>
-          <Text style={styles.footerLabel}>Progress</Text>
-          <Text style={styles.footerPct}>{app.progressPct}%</Text>
+          <Text style={[styles.footerLabel, { color: colors.ink }]}>{t("progress", language)}</Text>
+          <Text style={[styles.footerPct, { color: colors.brand }]}>{app.progressPct}%</Text>
         </View>
         <ProgressBar value={app.progressPct} style={{ marginTop: 8 }} />
       </View>
@@ -103,34 +117,37 @@ export default function ApplicationOverview({
 }
 
 function CardWrapper({ children }: { children: React.ReactNode }) {
-  return <View style={styles.card}>{children}</View>;
+  const colors = useThemeColors();
+  return <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>{children}</View>;
 }
 
 function CardHeader({ icon, title }: { icon: string; title: string }) {
+  const colors = useThemeColors();
   return (
     <View style={styles.cardHeader}>
       <IconTile name={icon} size="sm" tone="brand" />
-      <Text style={styles.cardHeaderTitle}>{title}</Text>
+      <Text style={[styles.cardHeaderTitle, { color: colors.ink }]}>{title}</Text>
     </View>
   );
 }
 
-function OverviewCard({ app }: { app: any }) {
+function OverviewCard({ app, language }: { app: any; language: string }) {
+  const colors = useThemeColors();
   return (
     <CardWrapper>
-      <CardHeader icon="FileText" title="Overview" />
+      <CardHeader icon="FileText" title={t("overview", language)} />
       <ScrollView
         style={styles.cardScroll}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.description}>{app.overview.description}</Text>
-        <Text style={styles.sectionTitle}>Next steps</Text>
+        <Text style={[styles.description, { color: colors.inkMuted }]}>{app.overview.description}</Text>
+        <Text style={[styles.sectionTitle, { color: colors.ink }]}>{t("nextSteps", language)}</Text>
         {app.overview.steps.map((step: any, i: number) => (
           <View key={i} style={styles.stepRow}>
             <View
               style={[
                 styles.stepCheck,
-                step.done ? styles.stepCheckDone : styles.stepCheckPending,
+                step.done ? [styles.stepCheckDone, { backgroundColor: colors.brand }] : [styles.stepCheckPending, { borderColor: colors.cardBorder }],
               ]}
             >
               {step.done && <Check size={12} color={colors.surface} />}
@@ -138,7 +155,8 @@ function OverviewCard({ app }: { app: any }) {
             <Text
               style={[
                 styles.stepText,
-                step.done && styles.stepTextDone,
+                { color: colors.ink },
+                step.done && [styles.stepTextDone, { color: colors.inkMuted }],
               ]}
             >
               {step.text}
@@ -153,10 +171,13 @@ function OverviewCard({ app }: { app: any }) {
 function DeadlinesCard({
   app,
   onOpenDeadline,
+  language,
 }: {
   app: any;
   onOpenDeadline: (appId: string, day: number) => void;
+  language: string;
 }) {
+  const colors = useThemeColors();
   const cal = app.calendarMonth;
   const firstDay = new Date(cal.year, cal.month, 1);
   const daysInMonth = new Date(cal.year, cal.month + 1, 0).getDate();
@@ -171,20 +192,20 @@ function DeadlinesCard({
   );
 
   const nextDay = app.nextDeadline?.day ?? null;
-  const dayNames = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const localDayNames = dayNames(language);
 
   return (
     <CardWrapper>
-      <CardHeader icon="CalendarDays" title="Deadlines" />
+      <CardHeader icon="CalendarDays" title={t("deadlines", language)} />
       <ScrollView
         style={styles.cardScroll}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.calMonthLabel}>{cal.monthName} {cal.year}</Text>
+        <Text style={[styles.calMonthLabel, { color: colors.ink }]}>{cal.monthName} {cal.year}</Text>
         <View style={styles.calGrid}>
-          {dayNames.map((d) => (
-            <View key={d} style={styles.calCell}>
-              <Text style={styles.calDayName}>{d}</Text>
+          {localDayNames.map((d, i) => (
+            <View key={i} style={styles.calCell}>
+              <Text style={[styles.calDayName, { color: colors.inkMuted }]}>{d}</Text>
             </View>
           ))}
           {Array.from({ length: leadEmpty }).map((_, i) => (
@@ -204,14 +225,15 @@ function DeadlinesCard({
                 <View
                   style={[
                     styles.calDay,
-                    isDeadline && styles.calDayDeadline,
-                    isNext && styles.calDayNext,
+                    isDeadline && [styles.calDayDeadline, { backgroundColor: colors.deadlineBg }],
+                    isNext && [styles.calDayNext, { borderColor: colors.deadlineDot }],
                   ]}
                 >
                   <Text
                     style={[
                       styles.calDayText,
-                      isDeadline && styles.calDayDeadlineText,
+                      { color: colors.ink },
+                      isDeadline && [styles.calDayDeadlineText, { color: colors.deadlineText }],
                     ]}
                   >
                     {day}
@@ -224,9 +246,9 @@ function DeadlinesCard({
 
         {app.nextDeadline && (
           <View style={styles.nextDeadline}>
-            <View style={styles.nextDeadlineDot} />
-            <Text style={styles.nextDeadlineText}>
-              Next: {app.nextDeadline.day} {app.nextDeadline.monthName} —{" "}
+            <View style={[styles.nextDeadlineDot, { backgroundColor: colors.deadlineDot }]} />
+            <Text style={[styles.nextDeadlineText, { color: colors.deadlineText }]}>
+              {t("next", language)}: {app.nextDeadline.day} {app.nextDeadline.monthName} —{" "}
               {app.nextDeadline.label}
             </Text>
           </View>
@@ -240,34 +262,87 @@ function DocumentsCard({
   app,
   onAddDocument,
   onOpenDocument,
+  onDeleteDocument,
+  onClearChat,
+  language,
 }: {
   app: any;
   onAddDocument: (appId: string) => void;
   onOpenDocument: (appId: string, docId: string) => void;
+  onDeleteDocument: (appId: string, docId: string) => void;
+  onClearChat: (docId: string) => void;
+  language: string;
 }) {
+  const colors = useThemeColors();
+  const showActions = (doc: any) => {
+    Alert.alert(
+      t("documentActions", language),
+      doc.name,
+      [
+        { text: t("cancel", language), style: "cancel" },
+        {
+          text: t("clearChat", language),
+          onPress: () => {
+            Alert.alert(
+              t("clearChat", language),
+              t("clearChatConfirm", language),
+              [
+                { text: t("cancel", language), style: "cancel" },
+                {
+                  text: t("clearChat", language),
+                  style: "destructive",
+                  onPress: () => onClearChat(doc.id),
+                },
+              ],
+            );
+          },
+        },
+        {
+          text: t("delete", language),
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              t("deleteDocument", language),
+              t("deleteDocumentConfirm", language),
+              [
+                { text: t("cancel", language), style: "cancel" },
+                {
+                  text: t("delete", language),
+                  style: "destructive",
+                  onPress: () => onDeleteDocument(app.id, doc.id),
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <CardWrapper>
-      <CardHeader icon="FileText" title="Documents" />
+      <CardHeader icon="FileText" title={t("documents", language)} />
       <ScrollView
         style={styles.cardScroll}
         showsVerticalScrollIndicator={false}
       >
         {app.documents.map((doc: any) => (
-          <TouchableOpacity
+          <PressableScale
             key={doc.id}
-            style={styles.docRow}
+            style={[styles.docRow, { borderBottomColor: colors.cardBorder }]}
             onPress={() => onOpenDocument(app.id, doc.id)}
-            activeOpacity={0.7}
+            onLongPress={() => showActions(doc)}
+            delayLongPress={400}
           >
             <IconTile name={doc.icon} size="sm" tone="brand" />
             <View style={styles.docBody}>
-              <Text style={styles.docName} numberOfLines={1}>
+              <Text style={[styles.docName, { color: colors.ink }]} numberOfLines={1}>
                 {doc.name}
               </Text>
-              <Text style={styles.docStatus}>{doc.status}</Text>
+              <Text style={[styles.docStatus, { color: colors.inkMuted }]}>{doc.status}</Text>
             </View>
             <ChevronRight size={18} color={colors.inkMuted} />
-          </TouchableOpacity>
+          </PressableScale>
         ))}
         <TouchableOpacity
           style={styles.addDocButton}
@@ -275,7 +350,7 @@ function DocumentsCard({
           activeOpacity={0.7}
         >
           <CirclePlus size={20} color={colors.brand} />
-          <Text style={styles.addDocText}>Add document</Text>
+          <Text style={[styles.addDocText, { color: colors.brand }]}>{t("addDocument", language)}</Text>
         </TouchableOpacity>
       </ScrollView>
     </CardWrapper>
@@ -295,10 +370,10 @@ const styles = StyleSheet.create({
   },
   card: {
     width: CARD_WIDTH,
-    backgroundColor: colors.surface,
+    backgroundColor: defaultColors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: defaultColors.cardBorder,
     overflow: "hidden",
     padding: 16,
   },
@@ -314,7 +389,7 @@ const styles = StyleSheet.create({
   cardHeaderTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   dots: {
     flexDirection: "row",
@@ -329,19 +404,19 @@ const styles = StyleSheet.create({
   },
   dotActive: {
     width: 24,
-    backgroundColor: colors.brand,
+    backgroundColor: defaultColors.brand,
   },
   dotInactive: {
     width: 8,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: defaultColors.cardBorder,
   },
   footer: {
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 16,
-    backgroundColor: colors.surface,
+    backgroundColor: defaultColors.surface,
     borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
+    borderTopColor: defaultColors.cardBorder,
   },
   footerRow: {
     flexDirection: "row",
@@ -351,22 +426,22 @@ const styles = StyleSheet.create({
   footerLabel: {
     fontSize: 14,
     fontWeight: "500",
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   footerPct: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.brand,
+    color: defaultColors.brand,
   },
   description: {
     fontSize: 14,
     lineHeight: 21,
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.ink,
+    color: defaultColors.ink,
     marginTop: 16,
     marginBottom: 8,
   },
@@ -384,25 +459,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepCheckDone: {
-    backgroundColor: colors.brand,
+    backgroundColor: defaultColors.brand,
   },
   stepCheckPending: {
     borderWidth: 1.5,
-    borderColor: colors.cardBorder,
+    borderColor: defaultColors.cardBorder,
   },
   stepText: {
     flex: 1,
     fontSize: 14,
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   stepTextDone: {
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
     textDecorationLine: "line-through",
   },
   calMonthLabel: {
     fontSize: 15,
     fontWeight: "600",
-    color: colors.ink,
+    color: defaultColors.ink,
     textAlign: "center",
     marginBottom: 12,
   },
@@ -418,7 +493,7 @@ const styles = StyleSheet.create({
   calDayName: {
     fontSize: 12,
     fontWeight: "500",
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
   },
   calDay: {
     width: 32,
@@ -428,18 +503,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   calDayDeadline: {
-    backgroundColor: colors.deadlineBg,
+    backgroundColor: defaultColors.deadlineBg,
   },
   calDayNext: {
     borderWidth: 2,
-    borderColor: colors.deadlineDot,
+    borderColor: defaultColors.deadlineDot,
   },
   calDayText: {
     fontSize: 14,
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   calDayDeadlineText: {
-    color: colors.deadlineText,
+    color: defaultColors.deadlineText,
     fontWeight: "600",
   },
   nextDeadline: {
@@ -453,11 +528,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.deadlineDot,
+    backgroundColor: defaultColors.deadlineDot,
   },
   nextDeadlineText: {
     fontSize: 13,
-    color: colors.deadlineText,
+    color: defaultColors.deadlineText,
     flex: 1,
   },
   docRow: {
@@ -466,7 +541,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: defaultColors.cardBorder,
   },
   docBody: {
     flex: 1,
@@ -474,11 +549,11 @@ const styles = StyleSheet.create({
   docName: {
     fontSize: 14,
     fontWeight: "500",
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   docStatus: {
     fontSize: 12,
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
     marginTop: 2,
   },
   addDocButton: {
@@ -490,6 +565,6 @@ const styles = StyleSheet.create({
   addDocText: {
     fontSize: 14,
     fontWeight: "500",
-    color: colors.brand,
+    color: defaultColors.brand,
   },
 });

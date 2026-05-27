@@ -1,187 +1,163 @@
-// All data is static and lives only in memory. The app mutates a copy of this
-// in App-level state to support adding applications and documents.
+// Mock data for 3 supported application types.
+// Documents with an `imageKey` field reference bundled assets in assets/documents/.
+
+// Template checklists for each application type.
+// When a user creates a new application, these define the required documents.
+export const applicationTemplates = {
+  anmeldung: {
+    icon: 'Home',
+    title: 'Address registration (Anmeldung)',
+    description:
+      'Register your new address at the Bürgeramt. Required within 14 days of moving in.',
+    requiredDocs: [
+      'Wohnungsgeberbestätigung (landlord confirmation)',
+      'Anmeldeformular (registration form)',
+      'Passport or national ID card',
+      'Marriage certificate (if married)',
+      'Birth certificate for children (if applicable)',
+      'Residence permit or visa (non-EU citizens)',
+    ],
+  },
+  'blue-card': {
+    icon: 'IdCard',
+    title: 'EU Blue Card',
+    description:
+      'Apply for a work permit for skilled non-EU workers at the Ausländerbehörde.',
+    requiredDocs: [
+      'Valid passport (color copy)',
+      'Employment contract or job offer',
+      'Employer job description form (Erklärung zum Beschäftigungsverhältnis)',
+      'University degree certificate',
+      'ZAB Statement of Comparability (if foreign degree)',
+      'Health insurance proof',
+      'Registration certificate (Meldebestätigung)',
+      'Landlord confirmation (Wohnungsgeberbestätigung)',
+      'Lease agreement (Mietvertrag)',
+      'Biometric passport photo',
+    ],
+  },
+  kindergeld: {
+    icon: 'Baby',
+    title: 'Child benefit (Kindergeld)',
+    description:
+      'Apply for €259/month child benefit from the Familienkasse. Both parents must sign the KG1 form.',
+    requiredDocs: [
+      'KG1 main application form',
+      'KG1-AnK child appendix (one per child)',
+      'Child birth certificate (+ certified translation if foreign)',
+      'Tax ID (yours)',
+      'Tax ID (child)',
+      'Copy of residence permit (non-EU citizens)',
+      'Registration certificate (Anmeldebestätigung)',
+      'Passport or ID',
+      'German bank account details (IBAN)',
+    ],
+  },
+};
 
 export const initialApplications = [
   {
-    id: 'residence',
-    icon: 'IdCard',
-    title: 'Residence permit extension',
-    progressPct: 60,
+    id: 'anmeldung',
+    icon: 'Home',
+    title: 'Address registration (Anmeldung)',
+    progressPct: 33,
     isNew: false,
-    docsRequired: 5,
+    docsRequired: 6,
+    createdAt: '2026-05-20T10:30:00.000Z',
     overview: {
-      description: 'Renew your residence title before the current one expires.',
-      steps: [
-        { text: 'Scan your current permit', done: true },
-        { text: 'Book an appointment', done: false },
-        { text: 'Upload proof of income', done: false },
-      ],
+      description: applicationTemplates.anmeldung.description,
+      steps: applicationTemplates.anmeldung.requiredDocs.map((text, i) => ({
+        text,
+        done: i < 2,
+      })),
     },
     documents: [
-      { id: 'doc-residence-1', icon: 'FileText', name: 'Current permit', status: 'Scanned' },
-      { id: 'doc-residence-2', icon: 'FileText', name: 'Passport copy', status: 'Scanned' },
-      { id: 'doc-residence-3', icon: 'FileSignature', name: 'Application form', status: 'In review' },
+      {
+        id: 'doc-anm-wgb',
+        icon: 'FileText',
+        name: 'Wohnungsgeberbestätigung',
+        status: 'Scanned',
+        imageKey: 'wohnungsgeberbestaetigung',
+        summary:
+          'Landlord confirmation of move-in, required by law (§19 BMG). Your landlord fills in their name, the apartment address, and the move-in date, then signs it. You must bring this to the Bürgeramt — a rental contract does not replace it.',
+      },
+      {
+        id: 'doc-anm-form',
+        icon: 'FileSignature',
+        name: 'Anmeldeformular',
+        status: 'Scanned',
+        imageKey: 'anmeldung',
+        summary:
+          'The official registration form you submit at the Bürgeramt. Contains your personal details — name, date of birth, nationality, marital status, previous address, and new address. You can pre-fill it at home or complete it at the appointment.',
+      },
     ],
     deadlines: [
-      { day: 4, month: 5, year: 2026, label: 'Appointment confirmation due' },
-      { day: 11, month: 5, year: 2026, label: 'Submit application form' },
-      { day: 25, month: 5, year: 2026, label: 'Final renewal deadline' },
+      { day: 3, month: 6, year: 2026, label: 'Bürgeramt appointment' },
+      { day: 10, month: 6, year: 2026, label: '14-day registration deadline' },
     ],
-    nextDeadline: { day: 11, monthName: 'June', label: 'submit form' },
-    calendarMonth: { month: 5, year: 2026, monthName: 'June' }, // 0-indexed month (5 = June)
+    nextDeadline: { day: 3, monthName: 'June', label: 'Bürgeramt appointment' },
+    calendarMonth: { month: 5, year: 2026, monthName: 'June' },
   },
   {
     id: 'kindergeld',
     icon: 'Baby',
     title: 'Child benefit (Kindergeld)',
-    progressPct: 25,
+    progressPct: 22,
     isNew: false,
-    docsRequired: 4,
+    docsRequired: 9,
+    createdAt: '2026-05-22T14:15:00.000Z',
     overview: {
-      description: 'Apply for monthly child support from the Familienkasse.',
-      steps: [
-        { text: 'Add child birth certificate', done: true },
-        { text: 'Fill out the KG1 form', done: false },
-        { text: 'Add proof of address', done: false },
-        { text: 'Submit to Familienkasse', done: false },
-      ],
+      description: applicationTemplates.kindergeld.description,
+      steps: applicationTemplates.kindergeld.requiredDocs.map((text, i) => ({
+        text,
+        done: i < 2,
+      })),
     },
     documents: [
-      { id: 'doc-kg-1', icon: 'FileText', name: 'Birth certificate', status: 'Scanned' },
+      {
+        id: 'doc-kg-form',
+        icon: 'FileSignature',
+        name: 'KG1 — Antrag auf Kindergeld',
+        status: 'Scanned',
+        imageKey: 'kg1_antrag',
+        summary:
+          'The main Kindergeld application form. Contains your personal data, tax ID, bank details (IBAN), and information about the other parent. Both parents must sign it. Submit to your local Familienkasse.',
+      },
+      {
+        id: 'doc-kg-ank',
+        icon: 'FileSignature',
+        name: 'KG1-AnK — Anlage Kind',
+        status: 'Scanned',
+        imageKey: 'kg1_anlage_kind',
+        summary:
+          'Child appendix to the Kindergeld application — one form per child. Lists the child\'s name, date of birth, tax ID, and residence. For children over 18, additional sections cover education or training status.',
+      },
     ],
     deadlines: [
-      { day: 18, month: 5, year: 2026, label: 'Submit KG1 form' },
+      { day: 15, month: 6, year: 2026, label: 'Submit Kindergeld application' },
     ],
-    nextDeadline: { day: 18, monthName: 'June', label: 'submit KG1 form' },
-    calendarMonth: { month: 5, year: 2026, monthName: 'June' },
-  },
-  {
-    id: 'address',
-    icon: 'Home',
-    title: 'Address registration',
-    progressPct: 100,
-    isNew: false,
-    docsRequired: 4,
-    overview: {
-      description: 'Register your new address with the Bürgeramt.',
-      steps: [
-        { text: 'Scan tenancy agreement', done: true },
-        { text: 'Add landlord confirmation', done: true },
-        { text: 'Book Bürgeramt appointment', done: true },
-        { text: 'Receive Anmeldung confirmation', done: true },
-      ],
-    },
-    documents: [
-      { id: 'doc-addr-1', icon: 'FileText', name: 'Tenancy agreement', status: 'Scanned' },
-      { id: 'doc-addr-2', icon: 'FileText', name: 'Landlord confirmation', status: 'Scanned' },
-      { id: 'doc-addr-3', icon: 'FileSignature', name: 'Anmeldung form', status: 'Submitted' },
-      { id: 'doc-addr-4', icon: 'BadgeCheck', name: 'Anmeldung confirmation', status: 'Received' },
-    ],
-    deadlines: [],
-    nextDeadline: null,
-    calendarMonth: { month: 5, year: 2026, monthName: 'June' },
-  },
-  {
-    id: 'tax-id',
-    icon: 'Receipt',
-    title: 'Tax ID request',
-    progressPct: 5,
-    isNew: true,
-    docsRequired: 3,
-    overview: {
-      description: 'Request a German tax ID (Steueridentifikationsnummer) for income tax.',
-      steps: [
-        { text: 'Add Anmeldung confirmation', done: false },
-        { text: 'Fill out the request form', done: false },
-        { text: 'Send by post to BZSt', done: false },
-      ],
-    },
-    documents: [],
-    deadlines: [
-      { day: 30, month: 5, year: 2026, label: 'Send request by post' },
-    ],
-    nextDeadline: { day: 30, monthName: 'June', label: 'send by post' },
+    nextDeadline: { day: 15, monthName: 'June', label: 'submit application' },
     calendarMonth: { month: 5, year: 2026, monthName: 'June' },
   },
 ]
 
-// Catalog shown in the Add-application bottom sheet. Items already in the list
-// are filtered out at render time.
 export const applicationCatalog = [
   {
-    id: 'residence',
+    id: 'anmeldung',
+    icon: 'Home',
+    title: 'Address registration (Anmeldung)',
+    subtitle: 'Register at the Bürgeramt within 14 days',
+  },
+  {
+    id: 'blue-card',
     icon: 'IdCard',
-    title: 'Residence permit extension',
-    subtitle: 'Renew your residence title',
+    title: 'EU Blue Card',
+    subtitle: 'Work permit for skilled non-EU workers',
   },
   {
     id: 'kindergeld',
     icon: 'Baby',
     title: 'Child benefit (Kindergeld)',
-    subtitle: 'Monthly support from the Familienkasse',
+    subtitle: '€259/month per child from the Familienkasse',
   },
-  {
-    id: 'address',
-    icon: 'Home',
-    title: 'Address registration',
-    subtitle: 'Register your new address',
-  },
-  {
-    id: 'tax-id',
-    icon: 'Receipt',
-    title: 'Tax ID request',
-    subtitle: 'Get your Steueridentifikationsnummer',
-  },
-  {
-    id: 'driver-licence',
-    icon: 'Car',
-    title: "Driver's licence conversion",
-    subtitle: 'Convert a foreign licence',
-  },
-  {
-    id: 'health-insurance',
-    icon: 'HeartPulse',
-    title: 'Health insurance enrolment',
-    subtitle: 'Sign up with a Krankenkasse',
-  },
-  {
-    id: 'bank-account',
-    icon: 'Landmark',
-    title: 'Bank account opening',
-    subtitle: 'Open a German current account',
-  },
-  {
-    id: 'pension',
-    icon: 'PiggyBank',
-    title: 'Pension registration',
-    subtitle: 'Get your social security number',
-  },
-]
-
-// Canned chat thread shown when opening a document.
-export const initialChatThread = [
-  {
-    id: 'm1',
-    role: 'assistant',
-    text: "I've read your form. Ask me about any field you're unsure how to fill.",
-  },
-  {
-    id: 'm2',
-    role: 'user',
-    text: 'What do I put in field 7?',
-  },
-  {
-    id: 'm3',
-    role: 'assistant',
-    text: 'Field 7 is your current address. Use the address shown on your Anmeldung confirmation.',
-  },
-]
-
-// Stock replies used when the user types a message in the chat input. Cycles
-// through; nothing here calls a real model.
-export const cannedReplies = [
-  "Good question. Use the same address you registered at the Bürgeramt.",
-  "You can leave that blank if it doesn't apply to your situation.",
-  "Attach a copy of your most recent payslip — three months is usually enough.",
-  "If you're unsure, the Familienkasse helpline can confirm it for your case.",
 ]

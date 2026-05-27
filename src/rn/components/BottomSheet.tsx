@@ -7,7 +7,8 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { colors } from "../theme";
+import { useThemeColors } from "../ThemeContext";
+import { colors as defaultColors } from "../theme";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function BottomSheet({ open, onClose, children }: Props) {
+  const colors = useThemeColors();
   const [visible, setVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
@@ -64,9 +66,9 @@ export default function BottomSheet({ open, onClose, children }: Props) {
           />
         </Pressable>
         <Animated.View
-          style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+          style={[styles.sheet, { backgroundColor: colors.surface, transform: [{ translateY: slideAnim }] }]}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: colors.cardBorder }]} />
           {children}
         </Animated.View>
       </View>
@@ -84,7 +86,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
   },
   sheet: {
-    backgroundColor: colors.surface,
+    backgroundColor: defaultColors.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
@@ -93,7 +95,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: defaultColors.cardBorder,
     marginTop: 10,
     marginBottom: 4,
   },

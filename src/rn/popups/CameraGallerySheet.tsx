@@ -1,7 +1,8 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Camera, Image as ImageIcon } from "../iconMap";
 import BottomSheet from "../components/BottomSheet";
-import { colors } from "../theme";
+import { useThemeColors } from "../ThemeContext";
+import { colors as defaultColors } from "../theme";
 
 interface Props {
   open: boolean;
@@ -14,11 +15,12 @@ export default function CameraGallerySheet({
   onClose,
   onChoose,
 }: Props) {
+  const colors = useThemeColors();
   return (
     <BottomSheet open={open} onClose={onClose}>
       <View style={styles.content}>
-        <Text style={styles.title}>Add a document</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.title, { color: colors.ink }]}>Add a document</Text>
+        <Text style={[styles.subtitle, { color: colors.inkMuted }]}>
           Choose how you'd like to add your document.
         </Text>
 
@@ -28,12 +30,12 @@ export default function CameraGallerySheet({
             onPress={() => onChoose("camera")}
             activeOpacity={0.7}
           >
-            <View style={styles.optionIcon}>
+            <View style={[styles.optionIcon, { backgroundColor: colors.brandSoft }]}>
               <Camera size={22} color={colors.brand} />
             </View>
             <View style={styles.optionBody}>
-              <Text style={styles.optionTitle}>Take a photo</Text>
-              <Text style={styles.optionSubtitle}>
+              <Text style={[styles.optionTitle, { color: colors.ink }]}>Take a photo</Text>
+              <Text style={[styles.optionSubtitle, { color: colors.inkMuted }]}>
                 Use your camera to scan
               </Text>
             </View>
@@ -44,12 +46,12 @@ export default function CameraGallerySheet({
             onPress={() => onChoose("gallery")}
             activeOpacity={0.7}
           >
-            <View style={styles.optionIcon}>
+            <View style={[styles.optionIcon, { backgroundColor: colors.brandSoft }]}>
               <ImageIcon size={22} color={colors.brand} />
             </View>
             <View style={styles.optionBody}>
-              <Text style={styles.optionTitle}>Choose from gallery</Text>
-              <Text style={styles.optionSubtitle}>
+              <Text style={[styles.optionTitle, { color: colors.ink }]}>Choose from gallery</Text>
+              <Text style={[styles.optionSubtitle, { color: colors.inkMuted }]}>
                 Select an existing photo
               </Text>
             </View>
@@ -69,11 +71,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "500",
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   subtitle: {
     fontSize: 13,
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
     marginTop: 4,
   },
   options: {
@@ -91,7 +93,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: colors.brandSoft,
+    backgroundColor: defaultColors.brandSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -101,11 +103,11 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 15,
     fontWeight: "500",
-    color: colors.ink,
+    color: defaultColors.ink,
   },
   optionSubtitle: {
     fontSize: 13,
-    color: colors.inkMuted,
+    color: defaultColors.inkMuted,
     marginTop: 2,
   },
 });
